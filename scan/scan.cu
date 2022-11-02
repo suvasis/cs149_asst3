@@ -287,9 +287,7 @@ void index(int *prefix_sum, int *repeats_indicate, int *output, int length);
 // indices `i` for which `device_input[i] == device_input[i+1]`.
 //
 // Returns the total number of pairs found
-//int find_repeats(int* device_input, int length, int* device_output, int* temp) {
-int find_repeats(int *device_input, int length, int *device_output, int *temp) {
-//int find_repeats(int *device_input, int length, int *device_output) {
+int find_repeats(int *device_input, int length, int *device_output) {
 
     // CS149 TODO:
     //
@@ -305,6 +303,8 @@ int find_repeats(int *device_input, int length, int *device_output, int *temp) {
 
     //length doesn't work for exclusive_scan needs rounding
     int len = nextPow2(length);
+    int *temp;
+    cudaMalloc((void **)&temp, len * sizeof(int));
 
     if (length <= BLOCK_SIZE) {
 
@@ -326,6 +326,7 @@ int find_repeats(int *device_input, int length, int *device_output, int *temp) {
     }
     int  result;
     cudaMemcpy(&result, temp + length - 1, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaFree(temp);
     return result;
 
 }
@@ -340,20 +341,16 @@ double cudaFindRepeats(int *input, int length, int *output, int *output_length) 
     int *device_output;
     int rounded_length = nextPow2(length);
 
-    //
-    int *temp;
 
     cudaMalloc((void **)&device_input, rounded_length * sizeof(int));
     cudaMalloc((void **)&device_output, rounded_length * sizeof(int));
-    cudaMalloc((void **)&temp, rounded_length * sizeof(int));
     cudaMemcpy(device_input, input, length * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(device_output, input, length * sizeof(int), cudaMemcpyHostToDevice);
 
     cudaDeviceSynchronize();
     double startTime = CycleTimer::currentSeconds();
 
-    int result = find_repeats(device_input, length, device_output, temp);
-    //int result = find_repeats(device_input, length, device_output);//, temp);
+    int result = find_repeats(device_input, length, device_output);
 
     cudaDeviceSynchronize();
     double endTime = CycleTimer::currentSeconds();
