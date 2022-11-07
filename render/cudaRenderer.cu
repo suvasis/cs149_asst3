@@ -384,8 +384,83 @@ shadePixel(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr) {
 // Each thread renders a circle.  Since there is no protection to
 // ensure order of update or mutual exclusion on the output image, the
 // resulting image will be incorrect.
+
+
+////////////NOTES////////////////////////////////
+////////////////////NOTES from exclusiveScan.cu_inl///////////////////////////////////////
+//notes--
+//from circleBoxTest.cu_inl
+//circleInBox(
+//    float circleX, float circleY, float circleRadius,
+//    float boxL, float boxR, float boxT, float boxB)
+// check exclusiveScan.cu_inl
+
+// ================= USAGE (in cudaRenderer.cu) =====================
+
+// at the top of the file:
+
+// #define SCAN_BLOCK_DIM   BLOCKSIZE  // needed by sharedMemExclusiveScan implementation
+// #include "exclusiveScan.cu_inl"
+
+// ...
+
+// in a kernel:
+
+// If you're using 2D indices, compute a linear thread index as folows.
+// NOTE: scan assumes that every 32 adjacent linear thread indices
+// (0-31, 32-63, ...) form a warp, which means they execute in lockstep.
+
+// If you do linearThreadIndex = threadIdx.x * blockDim.x + threadIdx.y;
+// you will get a linear thread index, but it won't be sorted into warps,
+// which will break scan!
+
+// int linearThreadIndex =  threadIdx.y * blockDim.x + threadIdx.x;
+
+// __shared__ uint prefixSumInput[BLOCKSIZE];
+// __shared__ uint prefixSumOutput[BLOCKSIZE];
+// __shared__ uint prefixSumScratch[2 * BLOCKSIZE];
+// sharedMemExclusiveScan(linearThreadIndex, prefixSumInput, prefixSumOutput, prefixSumScratch, BLOCKSIZE);
+
+//#Define BLOCKSIZE
+////////////////////////
 __global__ void kernelRenderCircles() {
 
+///////////////////NOTES//////////////////////////////////////////////
+    int thread_per_block_x = 16;
+    int thread_per_block_y = 16;
+    int circle_per_thread = ..;
+    int total_number_thread_per_block = 256; //16*16
+    int pixel_per_thread_x = 2; //cut 2 times
+    int pixel_per_thread_y = 2;//cut 2 time
+    int pixel_per_thread   = 4 ; // 2*2
+    //https://cs.calvin.edu/courses/cs/374/CUDA/CUDA-Thread-Indexing-Cheatsheet.pdf
+    //int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int linearThreadIndex =  threadIdx.y * thread_per_block_x + threadIdx.x;
+
+    __shared__ uint array_of_circles[TOTAL_CIRCLES];
+    // number circles
+    __shared__ uint circle_count[total_number_thread_per_block];
+    // index of the circle/
+    __shared__ uint index_of_circle[total_number_thread_per_block];
+
+    ///////////float circleX, float circleY, float circleRadius,
+///////    float boxL, float boxR, float boxT, float boxB)
+
+
+    short imageWidth = cuConstRendererParams.imageWidth;
+    short imageHeight = cuConstRendererParams.imageHeight;
+
+    //left of box
+    float boxL = (1.f)* "number of pixel per block in x dir" * blockIdx.x / imageWidth ;
+    //right of box
+    float boxR = (1.f)* ("number of pixel per block in y dir" * blockIdx.x + "number of pixel per block in y dir") / imageWidth ;
+        //top of box
+    float boxB = (1.f)* "number of pixel per block in y dir" * blockIdx.x / imageHeight ;
+    float boxT = (1.f)* ("number of pixel per block in y dir" * blockIdx.x + "number of pixel per block in y dir") / imageHeight ;
+
+//////////////////////////////////////END OF NOTES////////////////////////////////////
+    //original below:
+    
     int index = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (index >= cuConstRendererParams.numCircles)
