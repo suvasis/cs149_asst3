@@ -436,7 +436,7 @@ __global__ void kernelRenderCircles() {
     //https://cs.calvin.edu/courses/cs/374/CUDA/CUDA-Thread-Indexing-Cheatsheet.pdf
     //int index = blockIdx.x * blockDim.x + threadIdx.x;
     int linearThreadIndex =  threadIdx.y * thread_per_block_x + threadIdx.x;
-
+    //how many total circles to be ordered in the array, some TOTAL_CIRCLES .. may be some numaber
     __shared__ uint array_of_circles[TOTAL_CIRCLES];
     // number circles
     __shared__ uint circle_count[total_number_thread_per_block];
