@@ -443,6 +443,7 @@ __global__ void kernelRenderCircles() {
     // index of the circle/
     __shared__ uint index_of_circle[total_number_thread_per_block];
 
+///////from circleBoxTest.cu_inl///////////////
     ///////////float circleX, float circleY, float circleRadius,
 ///////    float boxL, float boxR, float boxT, float boxB)
 
