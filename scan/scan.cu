@@ -48,15 +48,14 @@ void printBlkAndThreada();
 
 //forward declaration
 // downsweep phase
-__global__ 
+__global__
 void downsweep(int * output, int offset);
-
 //// upsweep phase
-__global__ 
-void upsweep(int * output, int offset); 
+__global__
+void upsweep(int * output, int offset);
 
 //output[N-1] = 0;
-__global__ 
+__global__
 void clear_last(int * array, int N);
 
 // exclusive_scan --
@@ -100,7 +99,6 @@ void exclusive_scan(int* input, int N, int* result)
     //    }
     //}
     //for (int two_d = 1; two_d <= N/2; two_d*=2)
-
     for (d; d > BLOCK_SIZE; d /= 2)
     {
         int gridSize = d / BLOCK_SIZE;
@@ -145,8 +143,6 @@ void exclusive_scan(int* input, int N, int* result)
     }
     cudaDeviceSynchronize();
 }
-
-
 // downsweep phase
 __global__
 void downsweep(int * output, int offset) {
@@ -183,8 +179,6 @@ void printBlkAndThreada() {
       int myThreadID =
               printf(" ThreadID %d: I am thread %d from block %d \n", myThreadID, threadIdx.x, blockIdx.x);
 }
-
-
 //
 // cudaScan --
 //
@@ -237,8 +231,6 @@ double cudaScan(int* inarray, int* end, int* resultarray)
     double overallDuration = endTime - startTime;
     return overallDuration;
 }
-
-
 // cudaScanThrust --
 //
 // Wrapper around the Thrust library's exclusive scan function
@@ -272,14 +264,13 @@ double cudaScanThrust(int* inarray, int* end, int* resultarray) {
 
 //forward declaration
 __global__
-void mark(int *input, int *output, int length); 
+void cmp_mark(int *input, int *output, int length);
 
 __global__
 void copy(int *input, int *output, int length);
 
 __global__
-void index(int *prefix_sum, int *repeats_indicate, int *output, int length); 
-
+void accu_index_1(int *prefix_sum, int *repeats_indicate, int *output, int length);
 
 // find_repeats --
 //
@@ -308,30 +299,32 @@ int find_repeats(int *device_input, int length, int *device_output) {
 
     if (length <= BLOCK_SIZE) {
 
-        mark<<<1, length - 1>>>(device_input, temp, length);
-	cudaDeviceSynchronize();
+        //copy the output to temp
+        cmp_mark<<<1, length - 1>>>(device_input, temp, length);
+        cudaDeviceSynchronize();
+        //call exclusive scan on temp
         exclusive_scan(temp, len, temp);
+        //copy the temp to device input
         copy<<<1, length - 1>>>(temp, device_input, length);
-	cudaDeviceSynchronize();
-        index<<<1, length - 1>>>(temp, device_input, device_output, length);
+        cudaDeviceSynchronize();
+        //aggregate the indexes.
+        accu_index_1<<<1, length - 1>>>(temp, device_input, device_output, length);
     } else {
 
         int gridSize = (length + BLOCK_SIZE ) / BLOCK_SIZE;
-        mark<<<gridSize, BLOCK_SIZE>>>(device_input, temp, length);
-	cudaDeviceSynchronize();
+        cmp_mark<<<gridSize, BLOCK_SIZE>>>(device_input, temp, length);
+        cudaDeviceSynchronize();
         exclusive_scan(temp, len, temp);
         copy<<<gridSize, BLOCK_SIZE>>>(temp, device_input, length);
-	cudaDeviceSynchronize();
-        index<<<gridSize, BLOCK_SIZE>>>(temp, device_input, device_output, length);
+        cudaDeviceSynchronize();
+        accu_index_1<<<gridSize, BLOCK_SIZE>>>(temp, device_input, device_output, length);
     }
     int  result;
     cudaMemcpy(&result, temp + length - 1, sizeof(int), cudaMemcpyDeviceToHost);
-    cudaFree(temp);
+     cudaFree(temp);
     return result;
 
 }
-
-
 //
 // cudaFindRepeats --
 //
@@ -367,7 +360,7 @@ double cudaFindRepeats(int *input, int length, int *output, int *output_length) 
 }
 
 __global__
-void mark(int *input, int *output, int length) {
+void cmp_mark(int *input, int *output, int length) {
     int _idx = threadIdx.x + blockDim.x * blockIdx.x;
     if (_idx < length - 1) {
         output[_idx] = input[_idx] == input[_idx + 1] ? 1 : 0;
@@ -381,9 +374,8 @@ void copy(int *input, int *output, int length) {
         output[_idx] = input[_idx + 1] - input[_idx];
     }
 }
-
 __global__
-void index(int *prefix_sum, int *repeats_indicate, int *output, int length) {
+void accu_index_1(int *prefix_sum, int *repeats_indicate, int *output, int length) {
     int _idx = threadIdx.x + blockDim.x * blockIdx.x;
     if (_idx < length - 1) {
         if (repeats_indicate[_idx] == 1) {
