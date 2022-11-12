@@ -18,11 +18,13 @@ float GBPerSec(int bytes, float sec) {
 __global__ void
 saxpy_kernel(int N, float alpha, float* x, float* y, float* result) {
 
+
     // compute overall thread index from position of thread in current
     // block, and given the block we are in (in this example only a 1D
     // calculation is needed so the code only looks at the .x terms of
     // blockDim and threadIdx.
     int index = blockIdx.x * blockDim.x + threadIdx.x;
+    //printf("index%d  blockIdx.x %d, %d, %d\n", index,blockIdx.x , blockDim.x , threadIdx.x);
 
 
     // this check is necessary to make the code work for values of N
@@ -52,6 +54,7 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     // Notice the round up here.  The code needs to compute the number
     // of threads blocks needed such that there is one thread per
     // element of the arrays.  This code is written to work for values
+      // element of the arrays.  This code is written to work for values
     // of N that are not multiples of threadPerBlock.
     const int blocks = (N + threadsPerBlock - 1) / threadsPerBlock;
 
@@ -65,7 +68,7 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     float* device_x = nullptr;
     float* device_y = nullptr;
     float* device_result = nullptr;
-    
+
     //
     // CS149 TODO: allocate device memory buffers on the GPU using cudaMalloc.
     //
@@ -75,49 +78,72 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     //
     // https://devblogs.nvidia.com/easy-introduction-cuda-c-and-c/
     //
-    
+
     cudaMalloc(&device_x, N*sizeof(float));
     cudaMalloc(&device_y, N*sizeof(float));
     cudaMalloc(&device_result, N*sizeof(float));
-        
+
     // start timing after allocation of device memory
     double startTime = CycleTimer::currentSeconds();
-
     //
     // CS149 TODO: copy input arrays to the GPU using cudaMemcpy
     //
+    //cudaEvent_t start, stop;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
     cudaMemcpy(device_x, xarray, N*sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_y, yarray, N*sizeof(float), cudaMemcpyHostToDevice);
 
     printf("<<< %d, %d >>>\n", blocks, threadsPerBlock);
-   
+
     // run CUDA kernel. (notice the <<< >>> brackets indicating a CUDA
     // kernel launch) Execution on the GPU occurs here.
+    //cudaEventRecord(start);
+    double startTime_saxpy = CycleTimer::currentSeconds();
+    // Perform SAXPY on elements
     saxpy_kernel<<<blocks, threadsPerBlock>>>(N, alpha, device_x, device_y, device_result);
+   // double endTime_saxpy = CycleTimer::currentSeconds();
+   //cudaEventRecord(stop);
     cudaDeviceSynchronize();
-    //
+    double endTime_saxpy = CycleTimer::currentSeconds();
+
+ //
     // CS149 TODO: copy result from GPU back to CPU using cudaMemcpy
     //
+    // Perform SAXPY on 1M elements
     cudaMemcpy( resultarray,device_result, N*sizeof(float), cudaMemcpyDeviceToHost);
-    
+    //cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    //cudaEventElapsedTime(&milliseconds, start, stop);
+    //cudaMemcpy(device_result, resultarray, N*sizeof(float), cudaMemcpyHostToDevice);
+    ///saxpy<<<(N+255)/256, 256>>>(N, 2.0f, xarray, yarray);
+    //cudaMemcpy(device_y, yarray, N*sizeof(float), cudaMemcpyHostToDevice);
+
+
     // end timing after result has been copied back into host memory
     double endTime = CycleTimer::currentSeconds();
 
     cudaError_t errCode = cudaPeekAtLastError();
     if (errCode != cudaSuccess) {
         fprintf(stderr, "WARNING: A CUDA error occured: code=%d, %s\n",
-		errCode, cudaGetErrorString(errCode));
+                errCode, cudaGetErrorString(errCode));
     }
 
+    double overallDuration_saxpy = endTime_saxpy - startTime_saxpy;
+    printf("Effective Bandwidth (GB/s):%.3f ms\t\t [%.3f GB/s]\n", 1000.f *overallDuration_saxpy,GBPerSec(totalBytes, overallDuration_saxpy));
     double overallDuration = endTime - startTime;
     printf("Effective BW by CUDA saxpy: %.3f ms\t\t[%.3f GB/s]\n", 1000.f * overallDuration, GBPerSec(totalBytes, overallDuration));
 
     //
     // CS149 TODO: free memory buffers on the GPU using cudaFree
     //
+    //cudaFree(device_x);
+    //cudaFree(device_y);
+    //cudaFree(device_result);
     cudaFree(device_x);
     cudaFree(device_y);
     cudaFree(device_result);
+
 }
 
 void printCudaInfo() {
